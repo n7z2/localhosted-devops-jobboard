@@ -87,22 +87,6 @@ python app.py
 
 4. **Track Applications** - Mark jobs as applied to keep track of your progress
 
-### Command Line
-
-```bash
-# Quick scan (API sources only)
-python scraper.py --quick
-
-# Full scan (all sources)
-python scraper.py --full
-
-# Enable parallel processing for faster scanning
-python scraper.py --full --parallel
-
-# Custom keywords
-python scraper.py --quick --keywords "kubernetes,terraform,aws"
-```
-
 ## Configuration
 
 ### Companies (`companies.json`)
