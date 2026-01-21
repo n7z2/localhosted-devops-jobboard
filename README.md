@@ -175,8 +175,6 @@ Add the company to `companies.json` under the appropriate ATS section.
 
 ## Tips
 
-- Run **Quick Scan** daily for fast updates from API sources
-- Run **Full Scan** weekly for comprehensive coverage
 - Use **Discover Companies** periodically to find new companies
 - Hide jobs you're not interested in to keep your list clean
 - Adjust location filters to match your target job market
