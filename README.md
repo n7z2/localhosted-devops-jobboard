@@ -118,12 +118,11 @@ Customize search keywords via the UI or edit directly:
 
 ### Locations (`data/locations.json`)
 
-Customize location filters via the UI or edit directly:
+Customize location filters via the UI or edit directly. Uses word boundary matching, so "canada" will match any Canadian location (Toronto, Vancouver, etc.):
 
 ```json
 {
-  "allowed": ["usa", "canada", "remote", "san francisco"],
-  "excluded": ["europe only", "uk only", "vienna"]
+  "allowed": ["usa", "canada", "remote", "worldwide"]
 }
 ```
 
@@ -158,7 +157,7 @@ job_scraper/
 
 2. **Filtering**: Jobs are filtered by:
    - Keywords in job title/description
-   - Location matching (allowed/excluded lists)
+   - Location matching (word boundary matching prevents "usa" matching "australia")
    - Deduplication by title + company
 
 3. **Storage**: Jobs are stored in JSON format and merged with existing jobs on each scan.

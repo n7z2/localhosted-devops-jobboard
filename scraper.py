@@ -7,10 +7,13 @@ This module is designed to be called from the web application only.
 import json
 import os
 import logging
-from datetime import datetime
-from typing import List, Dict
+from typing import List
 from dataclasses import asdict
 
+from config import (
+    DATA_DIR, load_companies, load_discovered_companies,
+    load_keywords, load_locations, ensure_data_dir
+)
 from scrapers import (
     Job, GreenhouseScraper, LeverScraper, AshbyScraper,
     RemotiveScraper, HackerNewsScraper, LinkedInScraper
@@ -22,83 +25,6 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger(__name__)
-
-# Paths
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR = os.environ.get('DATA_DIR', os.path.join(SCRIPT_DIR, 'data'))
-COMPANIES_FILE = os.path.join(SCRIPT_DIR, 'companies.json')
-DISCOVERED_FILE = os.path.join(DATA_DIR, 'discovered_companies.json')
-KEYWORDS_FILE = os.path.join(DATA_DIR, 'keywords.json')
-LOCATIONS_FILE = os.path.join(DATA_DIR, 'locations.json')
-
-
-def load_companies() -> Dict:
-    """Load company lists from JSON file"""
-    if os.path.exists(COMPANIES_FILE):
-        with open(COMPANIES_FILE, 'r') as f:
-            return json.load(f)
-    return {}
-
-
-def load_discovered_companies() -> Dict:
-    """Load discovered companies from file"""
-    if os.path.exists(DISCOVERED_FILE):
-        try:
-            with open(DISCOVERED_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            pass
-    return {}
-
-
-def load_keywords() -> List[str]:
-    """Load search keywords from file"""
-    if os.path.exists(KEYWORDS_FILE):
-        try:
-            with open(KEYWORDS_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            pass
-    # Default keywords
-    return [
-        'devops', 'sre', 'site reliability', 'platform engineer',
-        'infrastructure', 'cloud engineer', 'devsecops', 'kubernetes', 'terraform'
-    ]
-
-
-def load_locations() -> Dict:
-    """Load location filters from file or companies.json"""
-    # First check for custom locations file
-    if os.path.exists(LOCATIONS_FILE):
-        try:
-            with open(LOCATIONS_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            pass
-
-    # Fall back to companies.json locations
-    companies = load_companies()
-    if 'locations' in companies:
-        return {
-            'allowed': companies['locations'].get('allowed', []),
-            'excluded': companies['locations'].get('excluded', [])
-        }
-
-    # Default locations
-    return {
-        'allowed': [
-            'united states', 'usa', 'u.s.', 'america', 'canada', 'canadian',
-            'toronto', 'vancouver', 'montreal', 'ontario', 'british columbia',
-            'california', 'new york', 'texas', 'washington', 'colorado',
-            'san francisco', 'seattle', 'austin', 'denver', 'boston', 'chicago',
-            'remote', 'north america', 'worldwide', 'anywhere', 'global'
-        ],
-        'excluded': [
-            'europe only', 'eu only', 'uk only', 'emea only', 'apac only',
-            'india only', 'australia only', 'vienna', 'berlin', 'london',
-            'paris', 'amsterdam', 'dublin', 'singapore', 'tokyo', 'sydney'
-        ]
-    }
 
 
 def deduplicate_jobs(jobs: List[Job]) -> List[Job]:
@@ -117,7 +43,7 @@ def deduplicate_jobs(jobs: List[Job]) -> List[Job]:
 
 def save_jobs(jobs: List[Job], output_path: str):
     """Save jobs to JSON file"""
-    os.makedirs(os.path.dirname(output_path) if os.path.dirname(output_path) else '.', exist_ok=True)
+    ensure_data_dir()
 
     # Load existing jobs and merge
     existing_jobs = []
@@ -193,8 +119,7 @@ def run_scraper(mode='quick', keywords=None, output_path=None, parallel=True, wo
         'parallel_mode': parallel,
         'max_workers': workers,
         'keywords': keywords,
-        'allowed_locations': locations.get('allowed', []),
-        'excluded_locations': locations.get('excluded', [])
+        'allowed_locations': locations.get('allowed', [])
     }
 
     all_jobs: List[Job] = []

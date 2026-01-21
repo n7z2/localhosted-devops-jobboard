@@ -5,17 +5,16 @@ Individual scraper implementations for different job sources and ATS systems.
 
 import requests
 from bs4 import BeautifulSoup
-import json
-import os
 import re
 import time
 import random
 import logging
 from datetime import datetime
 from typing import List, Dict, Optional
-from dataclasses import dataclass, asdict
+from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from urllib.parse import urljoin, quote_plus
+
+from config import DEFAULT_KEYWORDS, matches_location_word_boundary
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +49,6 @@ class JobScraper:
         self.max_workers = config.get('max_workers', 10) if config else 10
         self.keywords = config.get('keywords', []) if config else []
         self.allowed_locations = config.get('allowed_locations', []) if config else []
-        self.excluded_locations = config.get('excluded_locations', []) if config else []
 
     def random_delay(self, min_sec=1, max_sec=3):
         """Random delay to avoid rate limiting"""
@@ -86,38 +84,38 @@ class JobScraper:
 
     def matches_keywords(self, title: str, description: str = "") -> bool:
         """Check if job matches configured keywords"""
-        if not self.keywords:
-            # Default DevOps keywords
-            default_keywords = [
-                'devops', 'sre', 'site reliability', 'platform engineer',
-                'infrastructure', 'cloud engineer', 'devsecops', 'kubernetes', 'terraform'
-            ]
-            keywords = default_keywords
-        else:
-            keywords = self.keywords
-
+        keywords = self.keywords if self.keywords else DEFAULT_KEYWORDS
         text = f"{title} {description}".lower()
         return any(kw.lower() in text for kw in keywords)
 
     def matches_location(self, location: str, description: str = "") -> bool:
-        """Check if job location is allowed (US/Canada)"""
-        text = f"{location} {description}".lower()
+        """Check if job location is allowed using word boundary matching"""
+        return matches_location_word_boundary(location, self.allowed_locations or None)
 
-        # Check excluded locations first
-        if self.excluded_locations:
-            if any(exc.lower() in text for exc in self.excluded_locations):
-                return False
+    def scrape_companies(self, companies: Dict, scrape_func) -> List[Job]:
+        """
+        Scrape multiple companies in parallel or sequentially.
 
-        # Check allowed locations
-        if self.allowed_locations:
-            return any(loc.lower() in text for loc in self.allowed_locations)
+        Args:
+            companies: Dict of company_name -> board_id
+            scrape_func: Function that takes (company_name, board_id) and returns List[Job]
+        """
+        if self.parallel_mode:
+            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+                futures = {
+                    executor.submit(scrape_func, name, board_id): name
+                    for name, board_id in companies.items()
+                }
+                for future in as_completed(futures):
+                    try:
+                        self.jobs.extend(future.result())
+                    except Exception as e:
+                        logger.debug(f"Error in parallel scrape: {e}")
+        else:
+            for company_name, board_id in companies.items():
+                self.jobs.extend(scrape_func(company_name, board_id))
 
-        # Default US/Canada check
-        us_canada_terms = [
-            'united states', 'usa', 'u.s.', 'america', 'canada', 'canadian',
-            'remote', 'north america', 'worldwide', 'anywhere', 'global'
-        ]
-        return any(term in text for term in us_canada_terms)
+        return self.jobs
 
 
 class GreenhouseScraper(JobScraper):
@@ -171,24 +169,7 @@ class GreenhouseScraper(JobScraper):
 
     def scrape(self) -> List[Job]:
         logger.info(f"Scraping {len(self.companies)} Greenhouse boards...")
-
-        if self.parallel_mode:
-            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                futures = {
-                    executor.submit(self._scrape_company, name, board_id): name
-                    for name, board_id in self.companies.items()
-                }
-                for future in as_completed(futures):
-                    try:
-                        jobs = future.result()
-                        self.jobs.extend(jobs)
-                    except Exception as e:
-                        logger.debug(f"Error in parallel scrape: {e}")
-        else:
-            for company_name, board_id in self.companies.items():
-                jobs = self._scrape_company(company_name, board_id)
-                self.jobs.extend(jobs)
-
+        self.scrape_companies(self.companies, self._scrape_company)
         logger.info(f"GreenhouseScraper: Found {len(self.jobs)} jobs")
         return self.jobs
 
@@ -244,24 +225,7 @@ class LeverScraper(JobScraper):
 
     def scrape(self) -> List[Job]:
         logger.info(f"Scraping {len(self.companies)} Lever boards...")
-
-        if self.parallel_mode:
-            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                futures = {
-                    executor.submit(self._scrape_company, name, board_id): name
-                    for name, board_id in self.companies.items()
-                }
-                for future in as_completed(futures):
-                    try:
-                        jobs = future.result()
-                        self.jobs.extend(jobs)
-                    except Exception as e:
-                        logger.debug(f"Error in parallel scrape: {e}")
-        else:
-            for company_name, board_id in self.companies.items():
-                jobs = self._scrape_company(company_name, board_id)
-                self.jobs.extend(jobs)
-
+        self.scrape_companies(self.companies, self._scrape_company)
         logger.info(f"LeverScraper: Found {len(self.jobs)} jobs")
         return self.jobs
 
@@ -319,24 +283,7 @@ class AshbyScraper(JobScraper):
 
     def scrape(self) -> List[Job]:
         logger.info(f"Scraping {len(self.companies)} Ashby boards...")
-
-        if self.parallel_mode:
-            with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
-                futures = {
-                    executor.submit(self._scrape_company, name, board_id): name
-                    for name, board_id in self.companies.items()
-                }
-                for future in as_completed(futures):
-                    try:
-                        jobs = future.result()
-                        self.jobs.extend(jobs)
-                    except Exception as e:
-                        logger.debug(f"Error in parallel scrape: {e}")
-        else:
-            for company_name, board_id in self.companies.items():
-                jobs = self._scrape_company(company_name, board_id)
-                self.jobs.extend(jobs)
-
+        self.scrape_companies(self.companies, self._scrape_company)
         logger.info(f"AshbyScraper: Found {len(self.jobs)} jobs")
         return self.jobs
 

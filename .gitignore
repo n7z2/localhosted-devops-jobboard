@@ -2,6 +2,9 @@
 data/
 *.db
 
+# Personal notes
+CLOUDFLARE_HOSTING.md
+
 # Python
 __pycache__/
 *.py[cod]

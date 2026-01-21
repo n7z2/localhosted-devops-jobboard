@@ -7,125 +7,33 @@ Simple Flask app to view and track job applications
 from flask import Flask, render_template, jsonify, request
 import json
 import os
-import re
 from datetime import datetime, timedelta
 import sqlite3
 import threading
 import math
 
+from config import (
+    DATA_DIR, DB_PATH, JOBS_FILE, DISCOVERED_FILE,
+    load_keywords, save_keywords, load_locations, save_locations,
+    load_json_file, ensure_data_dir, matches_location_word_boundary
+)
 from scraper import run_scraper as scraper_run
 from discovery import run_discovery as discovery_run
 
 app = Flask(__name__)
 
-# Configuration
-DATA_DIR = os.environ.get('DATA_DIR', os.path.join(os.path.dirname(__file__), 'data'))
-DB_PATH = os.path.join(DATA_DIR, 'applications.db')
-JOBS_FILE = os.path.join(DATA_DIR, 'devops_jobs.json')
-
 # Track scraper status
 scraper_status = {'running': False, 'last_run': None, 'message': ''}
-
-# Default keywords
-DEFAULT_KEYWORDS = [
-    'devops', 'sre', 'site reliability', 'platform engineer',
-    'infrastructure', 'cloud engineer', 'devsecops', 'kubernetes', 'terraform'
-]
-
-KEYWORDS_FILE = os.path.join(DATA_DIR, 'keywords.json')
-LOCATIONS_FILE = os.path.join(DATA_DIR, 'locations.json')
-COMPANIES_FILE = os.path.join(os.path.dirname(__file__), 'companies.json')
-
-# Default locations - these act as wildcards (e.g., "canada" matches any Canadian location)
-DEFAULT_LOCATIONS = {
-    'allowed': [
-        'united states', 'usa', 'u.s.', 'america',
-        'canada', 'north america', 'americas', 'us/canada',
-        'remote', 'worldwide', 'global', 'anywhere'
-    ]
-}
-
-
-def load_locations():
-    """Load location filters from file"""
-    # First try custom locations file
-    if os.path.exists(LOCATIONS_FILE):
-        try:
-            with open(LOCATIONS_FILE, 'r') as f:
-                data = json.load(f)
-                # Handle both old format (with excluded) and new format (allowed only)
-                if isinstance(data, dict) and 'allowed' in data:
-                    return {'allowed': data['allowed']}
-                return data
-        except:
-            pass
-
-    # Fall back to companies.json
-    if os.path.exists(COMPANIES_FILE):
-        try:
-            with open(COMPANIES_FILE, 'r') as f:
-                data = json.load(f)
-                if 'locations' in data:
-                    return {'allowed': data['locations'].get('allowed', [])}
-        except:
-            pass
-
-    return DEFAULT_LOCATIONS.copy()
-
-
-def save_locations(locations):
-    """Save location filters to file"""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(LOCATIONS_FILE, 'w') as f:
-        json.dump(locations, f, indent=2)
-
-
-def load_keywords():
-    """Load search keywords from file"""
-    if os.path.exists(KEYWORDS_FILE):
-        try:
-            with open(KEYWORDS_FILE, 'r') as f:
-                return json.load(f)
-        except:
-            pass
-    return DEFAULT_KEYWORDS.copy()
 
 
 def get_company_stats():
     """Get statistics about discovered companies"""
-    discovered_file = os.path.join(DATA_DIR, 'discovered_companies.json')
-    stats = {
-        'greenhouse': 0,
-        'lever': 0,
-        'ashby': 0,
-        'smartrecruiters': 0,
-        'bamboohr': 0,
-        'total': 0,
-        'last_updated': None
-    }
-
-    if os.path.exists(discovered_file):
-        try:
-            with open(discovered_file, 'r') as f:
-                data = json.load(f)
-                stats['greenhouse'] = len(data.get('greenhouse', {}))
-                stats['lever'] = len(data.get('lever', {}))
-                stats['ashby'] = len(data.get('ashby', {}))
-                stats['smartrecruiters'] = len(data.get('smartrecruiters', {}))
-                stats['bamboohr'] = len(data.get('bamboohr', {}))
-                stats['total'] = stats['greenhouse'] + stats['lever'] + stats['ashby'] + stats['smartrecruiters'] + stats['bamboohr']
-                stats['last_updated'] = data.get('last_updated')
-        except:
-            pass
-
+    data = load_json_file(DISCOVERED_FILE, {})
+    ats_keys = ['greenhouse', 'lever', 'ashby', 'smartrecruiters', 'bamboohr']
+    stats = {key: len(data.get(key, {})) for key in ats_keys}
+    stats['total'] = sum(stats.values())
+    stats['last_updated'] = data.get('last_updated')
     return stats
-
-
-def save_keywords(keywords):
-    """Save search keywords to file"""
-    os.makedirs(DATA_DIR, exist_ok=True)
-    with open(KEYWORDS_FILE, 'w') as f:
-        json.dump(keywords, f)
 
 
 def detect_work_type(job):
@@ -157,21 +65,13 @@ def is_job_in_allowed_location(job, locations=None):
     if locations is None:
         locations = load_locations()
 
-    location = job.get('location', '').lower()
-    title = job.get('title', '').lower()
-
-    # Check location field and title for allowed terms
+    location = job.get('location', '')
+    title = job.get('title', '')
     text = f"{location} {title}"
     allowed = locations.get('allowed', [])
 
-    # Check if any allowed term appears as a whole word (not substring)
-    # This prevents "usa" matching "australia"
-    for term in allowed:
-        term_lower = term.lower()
-        # Use word boundary regex to match whole words only
-        pattern = r'\b' + re.escape(term_lower) + r'\b'
-        if re.search(pattern, text):
-            return True
+    if matches_location_word_boundary(text, allowed):
+        return True
 
     # If job is marked as remote and remote is in allowed list
     if job.get('remote', False) and 'remote' in [t.lower() for t in allowed]:
@@ -182,7 +82,7 @@ def is_job_in_allowed_location(job, locations=None):
 
 def init_db():
     """Initialize SQLite database for tracking applications"""
-    os.makedirs(DATA_DIR, exist_ok=True)
+    ensure_data_dir()
     conn = sqlite3.connect(DB_PATH)
     c = conn.cursor()
     c.execute('''
@@ -227,10 +127,7 @@ def get_hidden_jobs():
 
 def load_jobs():
     """Load jobs from JSON file"""
-    if not os.path.exists(JOBS_FILE):
-        return []
-    with open(JOBS_FILE, 'r') as f:
-        return json.load(f)
+    return load_json_file(JOBS_FILE, [])
 
 
 def run_scraper(mode='quick'):
@@ -573,18 +470,11 @@ def get_discovery_status():
 @app.route('/api/companies')
 def get_discovered_companies():
     """Get all discovered companies"""
-    discovered_file = os.path.join(DATA_DIR, 'discovered_companies.json')
-    if os.path.exists(discovered_file):
-        with open(discovered_file, 'r') as f:
-            return jsonify(json.load(f))
-    return jsonify({
-        'greenhouse': {},
-        'lever': {},
-        'ashby': {},
-        'smartrecruiters': {},
-        'bamboohr': {},
-        'last_updated': None
-    })
+    default = {
+        'greenhouse': {}, 'lever': {}, 'ashby': {},
+        'smartrecruiters': {}, 'bamboohr': {}, 'last_updated': None
+    }
+    return jsonify(load_json_file(DISCOVERED_FILE, default))
 
 
 init_db()

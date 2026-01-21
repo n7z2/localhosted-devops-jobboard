@@ -373,26 +373,11 @@
   },
 
   "locations": {
-    "_description": "Allowed locations for job filtering. Jobs must match at least one term.",
+    "_description": "Allowed locations for job filtering. Uses word boundary matching (e.g., 'canada' matches any Canadian location).",
     "allowed": [
       "united states", "usa", "u.s.", "america",
-      "california", "new york", "texas", "florida", "washington", "colorado",
-      "massachusetts", "illinois", "georgia", "virginia", "north carolina",
-      "arizona", "oregon", "pennsylvania", "ohio", "michigan", "new jersey",
-      "nevada", "utah", "minnesota", "maryland", "tennessee", "indiana",
-      "san francisco", "los angeles", "seattle", "austin", "denver", "boston",
-      "chicago", "atlanta", "nyc", "new york city", "bay area", "silicon valley",
-      "canada", "canadian", "toronto", "vancouver", "montreal", "calgary",
-      "ottawa", "edmonton", "winnipeg", "quebec", "ontario", "british columbia",
-      "north america", "americas", "us/canada", "usa/canada", "us or canada",
+      "canada", "north america", "americas", "us/canada",
       "remote", "worldwide", "global", "anywhere"
-    ],
-    "excluded": [
-      "europe only", "eu only", "uk only", "emea only", "apac only",
-      "india only", "australia only", "latin america only", "asia only",
-      "germany only", "france only", "spain only", "italy only",
-      "vienna", "berlin", "london", "paris", "amsterdam", "dublin",
-      "singapore", "tokyo", "sydney", "melbourne"
     ]
   }
 }
