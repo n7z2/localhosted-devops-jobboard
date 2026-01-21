@@ -64,14 +64,6 @@ docker build -t jobboard .
 docker run -p 5000:5000 -v $(pwd)/data:/app/data jobboard
 ```
 
-### Manual Setup (without Docker)
-
-```bash
-cd job_scraper
-pip install flask beautifulsoup4 requests
-python app.py
-```
-
 ## Usage
 
 ### Web Interface
