@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir flask beautifulsoup4 requests
 
 # Copy application files
 COPY app.py .
+COPY config.py .
 COPY scraper.py .
 COPY scrapers.py .
 COPY discovery.py .
