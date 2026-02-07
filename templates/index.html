@@ -354,7 +354,7 @@
                 <div class="scrape-section">
                     <button class="btn btn-donate" onclick="window.open('https://buymeacoffee.com/n7z2', '_blank')" title="Support this project">Buy Me a Coffee</button>
                     {% if scraper_status.message %}
-                    <span class="scrape-status {% if scraper_status.running %}running{% endif %}">
+                    <span id="scrape-status-msg" class="scrape-status {% if scraper_status.running %}running{% endif %}">
                         {{ scraper_status.message }}
                     </span>
                     {% endif %}
@@ -806,6 +806,12 @@
         // Check if scrape is running on page load
         {% if scraper_status.running %}
         pollScrapeStatus();
+        {% else %}
+        // Auto-hide status message after 3 seconds if scrape is not running
+        const statusMsg = document.getElementById('scrape-status-msg');
+        if (statusMsg) {
+            setTimeout(() => statusMsg.style.display = 'none', 3000);
+        }
         {% endif %}
     </script>
 </body>
